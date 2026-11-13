@@ -1,0 +1,15 @@
+{
+  "name": "medigrid",
+  "version": "1.0.0",
+  "description": "MediGrid: City Emergency Bed & Patient Transfer Network - Yuktik '26 PS04 (Team EL-DORADO)",
+  "main": "scripts/start-all.js",
+  "scripts": {
+    "start": "node scripts/start-all.js",
+    "gateway": "node src/server/gateway.js",
+    "instance:1": "PORT=3001 INSTANCE_ID=instance-1 node src/server/instance.js",
+    "instance:2": "PORT=3002 INSTANCE_ID=instance-2 node src/server/instance.js",
+    "stress-test": "node scripts/run-stress-test.js"
+  },
+  "author": "Team EL-DORADO (Yuktik '26)",
+  "license": "MIT"
+}

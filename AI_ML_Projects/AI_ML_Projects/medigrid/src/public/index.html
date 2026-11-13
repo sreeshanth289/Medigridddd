@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediGrid | City Emergency Bed & Patient Transfer Network</title>
+  <!-- Leaflet CSS for City Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="theme-dark">
+  <!-- Top Navigation Bar -->
+  <header class="navbar">
+    <div class="nav-brand">
+      <div class="logo-shield">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z"/>
+          <path d="M12 8v8M8 12h8"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">MediGrid <span class="tag-ps04">Yuktik '26 · PS04</span></div>
+        <div class="brand-sub">Team EL-DORADO · City Emergency Bed & Patient Transfer Network</div>
+      </div>
+    </div>
+
+    <!-- Active Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" data-tab="control-room">
+        <span class="icon">🗺️</span> Control-Room Map
+      </button>
+      <button class="tab-btn" data-tab="hospital-console">
+        <span class="icon">🏥</span> Hospital Console
+      </button>
+      <button class="tab-btn" data-tab="ambulance-dispatch">
+        <span class="icon">🚑</span> Ambulance Dispatch
+      </button>
+      <button class="tab-btn" data-tab="transfer-saga">
+        <span class="icon">🔄</span> Transfer Saga
+      </button>
+      <button class="tab-btn" data-tab="operations-dashboard">
+        <span class="icon">📊</span> Ops & Metrics
+      </button>
+      <button class="tab-btn btn-sim-highlight" data-tab="stress-simulator">
+        <span class="icon">⚡</span> Stress & Failure Lab
+      </button>
+    </nav>
+
+    <!-- Cluster & Connection Status Pill -->
+    <div class="nav-status">
+      <div id="connectionPill" class="status-pill status-connected">
+        <span class="pulse-dot"></span>
+        <span id="connectionText">Instance 1 [Port 3001]</span>
+      </div>
+      <button id="themeToggleBtn" class="btn-icon" title="Toggle High Contrast / Theme">🌓</button>
+    </div>
+  </header>
+
+  <!-- Incoming Alert Banner (Hospital Incoming Transfer Alert with Countdown) -->
+  <div id="incomingTransferBanner" class="alert-banner hidden">
+    <div class="alert-banner-content">
+      <div class="alert-pulse-icon">🚨</div>
+      <div class="alert-info">
+        <div class="alert-headline" id="bannerHeadline">INCOMING TRANSFER REQUEST: CRITICAL PATIENT</div>
+        <div class="alert-subtext" id="bannerSubtext">Apollo Jubilee Hills is transferring a patient requiring an ICU bed.</div>
+      </div>
+      <div class="countdown-circle">
+        <div class="countdown-value" id="bannerCountdown">60s</div>
+        <div class="countdown-label">TO ACCEPT</div>
+      </div>
+      <div class="alert-actions">
+        <button id="btnBannerAccept" class="btn btn-success btn-lg">✓ Accept Transfer</button>
+        <button id="btnBannerReject" class="btn btn-danger btn-lg">✕ Divert / Reject</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <main class="main-content">
+    
+    <!-- TAB 1: Live Control-Room Map -->
+    <section id="tab-control-room" class="tab-panel active">
+      <div class="control-room-grid">
+        <!-- Map Panel -->
+        <div class="map-container-box">
+          <div class="panel-header">
+            <div class="panel-title">
+              <h3>Hyderabad Emergency Bed Grid</h3>
+              <span class="subtitle">42 Hospitals · 4,200+ Beds · Live Real-Time Stream</span>
+            </div>
+            <!-- Map Filters (WCAG Accessible with explicit labels & shapes) -->
+            <div class="map-controls">
+              <div class="filter-group">
+                <label>Filter Bed Type:</label>
+                <select id="mapBedFilter">
+                  <option value="ALL">All Types</option>
+                  <option value="ICU">ICU Only</option>
+                  <option value="VENTILATOR">Ventilator Only</option>
+                  <option value="GENERAL">General Ward</option>
+                  <option value="OXYGEN">Oxygen (HDU)</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label>Zone:</label>
+                <select id="mapZoneFilter">
+                  <option value="ALL">All Hyderabad Zones</option>
+                  <option value="Central">Central</option>
+                  <option value="West">West (Hitec/Gachibowli)</option>
+                  <option value="North">North (Secunderabad)</option>
+                  <option value="East">East</option>
+                  <option value="South">South</option>
+                </select>
+              </div>
+              <button id="btnRecenterMap" class="btn btn-sm btn-outline">📍 Recenter</button>
+            </div>
+          </div>
+
+          <!-- Leaflet Map Container -->
+          <div id="cityMap" class="leaflet-map-element"></div>
+
+          <!-- WCAG 1.4.1 Accessibility Map Legend -->
+          <div class="map-legend">
+            <span class="legend-item"><span class="legend-symbol sym-high">▲</span> High Availability (&gt; 15 beds)</span>
+            <span class="legend-item"><span class="legend-symbol sym-med">■</span> Moderate (5-15 beds)</span>
+            <span class="legend-item"><span class="legend-symbol sym-low">●</span> Critical Shortage (&lt; 5 beds)</span>
+            <span class="legend-item"><span class="legend-symbol sym-full">✕</span> Full / Diverting</span>
+            <span class="legend-item"><span class="legend-symbol sym-amb">🚑</span> Ambulance En-Route</span>
+          </div>
+        </div>
+
+        <!-- Live City Stats & Quick Dispatch Sidebar -->
+        <div class="sidebar-stats">
+          <div class="card stat-summary-card">
+            <h4>City Emergency Overview</h4>
+            <div class="stat-matrix">
+              <div class="stat-box">
+                <div class="stat-val" id="statTotalBeds">4,200</div>
+                <div class="stat-lbl">Total Beds</div>
+              </div>
+              <div class="stat-box stat-available">
+                <div class="stat-val" id="statFreeBeds">--</div>
+                <div class="stat-lbl">Free Available</div>
+              </div>
+              <div class="stat-box stat-reserved">
+                <div class="stat-val" id="statReservedBeds">--</div>
+                <div class="stat-lbl">Reserved (15m TTL)</div>
+              </div>
+              <div class="stat-box stat-occupied">
+                <div class="stat-val" id="statOccupiedBeds">--</div>
+                <div class="stat-lbl">Occupied</div>
+              </div>
+            </div>
+
+            <div class="type-breakdown-bar">
+              <div class="type-row">
+                <span>Free ICU Beds:</span>
+                <strong id="statFreeIcu" class="val-badge badge-icu">--</strong>
+              </div>
+              <div class="type-row">
+                <span>Free Ventilators:</span>
+                <strong id="statFreeVent" class="val-badge badge-vent">--</strong>
+              </div>
+              <div class="type-row">
+                <span>Free General:</span>
+                <strong id="statFreeGen" class="val-badge badge-gen">--</strong>
+              </div>
+              <div class="type-row">
+                <span>Search Latency (p95):</span>
+                <strong id="statP95" class="val-badge badge-fast">&lt; 3.5 ms</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Selected Hospital Quick View -->
+          <div class="card" id="selectedHospitalCard">
+            <h4 id="selHospName">Select a Hospital on the Map</h4>
+            <div id="selHospDetails" class="empty-state-text">
+              Click any hospital pin or ambulance on the map to inspect live availability and dispatch directly.
+            </div>
+          </div>
+
+          <!-- Live Event Feed Widget -->
+          <div class="card event-stream-card">
+            <div class="panel-header-mini">
+              <h4>Live Event Stream (RabbitMQ)</h4>
+              <span id="epsBadge" class="eps-pill">0 EPS</span>
+            </div>
+            <div id="miniEventLog" class="mini-log-scroll">
+              <div class="log-entry log-info">System initialized. Connected to durable topic exchange 'medigrid.events'.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: Hospital Bed-Management Console -->
+    <section id="tab-hospital-console" class="tab-panel">
+      <div class="console-header-bar card">
+        <div class="console-selector">
+          <label><strong>Select Hospital:</strong></label>
+          <select id="consoleHospitalSelect" class="input-select">
+            <!-- Populated dynamically with 42 hospitals -->
+          </select>
+          <span id="consoleHospZone" class="badge">West</span>
+          <span id="consoleHospPhone" class="badge-text">+91-40-23607777</span>
+        </div>
+
+        <div class="console-filter-actions">
+          <div class="keyboard-hints">
+            <kbd>A</kbd> Admit <kbd>D</kbd> Discharge <kbd>T</kbd> Transfer <kbd>Esc</kbd> Close
+          </div>
+          <button id="btnSimulateRollback" class="btn btn-outline btn-sm" title="Demonstrate Optimistic UI Rollback">
+            🧪 Test Optimistic Rollback
+          </button>
+        </div>
+      </div>
+
+      <!-- Bed Grid View -->
+      <div class="bed-console-body">
+        <div class="card bed-grid-card">
+          <div class="ward-tabs" id="wardTabsContainer">
+            <!-- Dynamic ward tabs -->
+          </div>
+
+          <div class="bed-type-legend-bar">
+            <span class="legend-chip"><span class="badge-color bg-avail"></span> Available (Click to Admit)</span>
+            <span class="legend-chip"><span class="badge-color bg-res"></span> Reserved (TTL 15m)</span>
+            <span class="legend-chip"><span class="badge-color bg-occ"></span> Occupied (Click to Discharge/Transfer)</span>
+            <span class="legend-chip"><span class="badge-color bg-clean"></span> Sanitizing / Cleaning</span>
+          </div>
+
+          <!-- Interactive Clickable Bed Grid -->
+          <div id="bedGridContainer" class="bed-matrix-grid">
+            <!-- Dynamically populated beds -->
+          </div>
+        </div>
+
+        <!-- Pending Transfers for Selected Hospital -->
+        <div class="card pending-transfers-card">
+          <h4>Incoming Transfer Requests (<span id="pendingTransferCount">0</span>)</h4>
+          <div id="pendingTransfersList" class="pending-list-scroll">
+            <div class="empty-state-text">No pending incoming transfer requests for this hospital.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: Ambulance Dispatch View -->
+    <section id="tab-ambulance-dispatch" class="tab-panel">
+      <div class="dispatch-container">
+        <div class="card dispatch-form-card">
+          <h3>🚑 Emergency Ambulance Bed Finder & Atomic Reservation</h3>
+          <p class="section-sub">Sub-100ms geospatial search across 42 hospitals with atomic distributed locking.</p>
+
+          <form id="dispatchForm" class="dispatch-form">
+            <div class="form-row">
+              <div class="form-field">
+                <label>Ambulance ID</label>
+                <input type="text" id="dispAmbId" value="AMB-108" class="input-text">
+              </div>
+              <div class="form-field">
+                <label>Patient Triage Criticality</label>
+                <select id="dispTriage" class="input-select">
+                  <option value="CRITICAL">Critical (Priority 10 · Immediate Handoff)</option>
+                  <option value="URGENT">Urgent (Priority 5 · Acute Care)</option>
+                  <option value="ROUTINE">Routine (Priority 1 · Standard Transfer)</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label>Required Bed Type</label>
+                <select id="dispBedType" class="input-select">
+                  <option value="ICU">ICU (Intensive Care)</option>
+                  <option value="VENTILATOR">Mechanical Ventilator</option>
+                  <option value="GENERAL">General Ward</option>
+                  <option value="OXYGEN">High-Flow Oxygen</option>
+                  <option value="ISOLATION">Isolation Ward</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-field">
+                <label>Current Location (GPS Coordinates)</label>
+                <div class="location-preset-btns">
+                  <button type="button" class="btn btn-xs btn-preset" data-lat="17.4399" data-lon="78.4983">Secunderabad</button>
+                  <button type="button" class="btn btn-xs btn-preset" data-lat="17.4447" data-lon="78.3752">Hitec City</button>
+                  <button type="button" class="btn btn-xs btn-preset" data-lat="17.4156" data-lon="78.4124">Jubilee Hills</button>
+                  <button type="button" class="btn btn-xs btn-preset" data-lat="17.3753" data-lon="78.4735">Charminar</button>
+                </div>
+                <div class="coords-input-group">
+                  <input type="number" step="0.0001" id="dispLat" value="17.4239" class="input-text" placeholder="Latitude">
+                  <input type="number" step="0.0001" id="dispLon" value="78.4526" class="input-text" placeholder="Longitude">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" id="btnFindBeds" class="btn btn-primary btn-lg">
+                ⚡ Find Nearest Suitable Bed (&lt; 100ms)
+              </button>
+              <div id="rateLimitCounter" class="rate-limit-badge">
+                Rate Limit Remaining: <span id="rateLimitVal">30</span>/30 req
+              </div>
+            </div>
+          </form>
+
+          <!-- Search Benchmark Result Header -->
+          <div id="searchBenchmarkBanner" class="benchmark-banner hidden">
+            <div class="benchmark-metric">
+              <span class="lbl">Redis Geospatial Latency:</span>
+              <strong id="benchLatencyVal" class="val">-- ms</strong>
+            </div>
+            <div class="benchmark-status" id="benchStatusBadge">✓ Met &lt; 100ms Target</div>
+          </div>
+
+          <!-- Matching Hospitals List -->
+          <div id="dispatchResultsList" class="dispatch-results-grid">
+            <!-- Results loaded here -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: Inter-Hospital Transfer Saga Tracker -->
+    <section id="tab-transfer-saga" class="tab-panel">
+      <div class="card saga-panel-card">
+        <div class="panel-header">
+          <div>
+            <h3>🔄 Inter-Hospital Transfer Saga Orchestrator</h3>
+            <span class="subtitle">Distributed Two-Phase Commit with Guaranteed Rollback & Compensation</span>
+          </div>
+          <button id="btnNewTransferModal" class="btn btn-primary">+ Initiate New Transfer</button>
+        </div>
+
+        <!-- Saga Architecture Visualizer -->
+        <div class="saga-diagram-banner">
+          <div class="saga-step-node completed">
+            <div class="step-num">1</div>
+            <div class="step-label">Hospital A<br>Initiate Request</div>
+          </div>
+          <div class="saga-arrow">➔</div>
+          <div class="saga-step-node completed">
+            <div class="step-num">2</div>
+            <div class="step-label">Redis Atomic Lock<br>Target Bed Held</div>
+          </div>
+          <div class="saga-arrow">➔</div>
+          <div class="saga-step-node completed">
+            <div class="step-num">3</div>
+            <div class="step-label">RabbitMQ Priority<br>Dispatch (Pri 10)</div>
+          </div>
+          <div class="saga-arrow">➔</div>
+          <div class="saga-step-node active">
+            <div class="step-num">4</div>
+            <div class="step-label">Hospital B Alert<br>Countdown Handshake</div>
+          </div>
+          <div class="saga-arrow">➔</div>
+          <div class="saga-step-node">
+            <div class="step-num">5</div>
+            <div class="step-label">Accept &amp; Complete<br>OR Clean Rollback</div>
+          </div>
+        </div>
+
+        <!-- Active and Historical Transfer Table -->
+        <div class="transfers-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Transfer ID</th>
+                <th>Patient</th>
+                <th>Priority / Triage</th>
+                <th>From Hospital</th>
+                <th>To Hospital</th>
+                <th>Bed Type</th>
+                <th>Status</th>
+                <th>Countdown</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="transfersTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: Operations & Observability Dashboard -->
+    <section id="tab-operations-dashboard" class="tab-panel">
+      <div class="ops-grid">
+        <!-- Live Metrics Cards -->
+        <div class="metric-card">
+          <div class="metric-title">Events Per Second (EPS)</div>
+          <div class="metric-number" id="metricEps">0</div>
+          <div class="metric-sub">Real-Time Ingestion</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Total Messages Published</div>
+          <div class="metric-number" id="metricPublished">0</div>
+          <div class="metric-sub">Publisher Confirmed</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Consumer Lag / Queued</div>
+          <div class="metric-number" id="metricLag">0</div>
+          <div class="metric-sub">Across All Services</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">p95 Bed-Search Latency</div>
+          <div class="metric-number text-success" id="metricP95">2.4 ms</div>
+          <div class="metric-sub">&lt; 100 ms SLA Met</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Active Dead Letters (DLQ)</div>
+          <div class="metric-number text-warning" id="metricDlq">0</div>
+          <div class="metric-sub">Replayable Messages</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Stateless Cluster Nodes</div>
+          <div class="metric-number text-info" id="metricNodes">2 Active</div>
+          <div class="metric-sub">Instance 1 &amp; 2 (Healthy)</div>
+        </div>
+      </div>
+
+      <!-- Queue Depths Table -->
+      <div class="card ops-queues-card">
+        <h4>RabbitMQ Queue Depths & Priority Status</h4>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Queue Name</th>
+              <th>Durable</th>
+              <th>Max Priority</th>
+              <th>Messages Queued</th>
+              <th>In-Flight (Prefetch)</th>
+              <th>Dead-Letter Target</th>
+            </tr>
+          </thead>
+          <tbody id="queueDepthsTableBody">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Dead Letter Queue (DLQ) Inspector & Replay Box -->
+      <div class="card dlq-inspector-card">
+        <div class="panel-header">
+          <div>
+            <h4>Dead-Letter Queue (DLQ) Inspector</h4>
+            <span class="subtitle">Failed messages captured with exponential retry failure reasons. 1-Click Replay supported.</span>
+          </div>
+          <button id="btnRefreshDlq" class="btn btn-outline btn-sm">Refresh DLQ</button>
+        </div>
+
+        <div id="dlqListContainer" class="dlq-scroll-list">
+          <div class="empty-state-text">No dead-lettered messages in 'medigrid.dlq'. All queues operating cleanly.</div>
+        </div>
+      </div>
+
+      <!-- Tamper-Evident Audit Trail -->
+      <div class="card audit-card">
+        <h4>Chronological Audit & Compliance Log</h4>
+        <div id="auditLogContainer" class="audit-log-list">
+          <!-- Loaded via API -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: Stress & Failure Lab (Judges Demonstration!) -->
+    <section id="tab-stress-simulator" class="tab-panel">
+      <div class="card simulator-hub-card">
+        <div class="panel-header">
+          <div>
+            <h3>⚡ Live Stress & Failure Lab (Yuktik '26 Judge Suite)</h3>
+            <span class="subtitle">One-click live demonstrations proving every technical outcome specified in the challenge brief.</span>
+          </div>
+          <span class="badge badge-warning">Interactive Proof Suite</span>
+        </div>
+
+        <div class="scenarios-grid">
+          <!-- Scenario 1 -->
+          <div class="scenario-card">
+            <div class="scenario-badge">Scenario 1 · Foundation</div>
+            <h4>20 Ambulances Race for Last ICU Bed</h4>
+            <p>20 ambulances concurrently request the single last available ICU bed at Apollo Hospital at the exact same millisecond.</p>
+            <div class="scenario-outcome">
+              <strong>Evaluation Target:</strong> ZERO double allocations across instances. Exactly 1 winner, 19 rejected.
+            </div>
+            <button class="btn btn-primary btn-run-sim" data-scenario="race_condition">
+              ▶ Run 20-Ambulance Race
+            </button>
+          </div>
+
+          <!-- Scenario 2 -->
+          <div class="scenario-card">
+            <div class="scenario-badge">Scenario 2 · Priority Leapfrog</div>
+            <h4>Priority Queue Leapfrogging</h4>
+            <p>Floods the broker with 2,000 routine messages, then injects 1 Critical Priority-10 Emergency Request.</p>
+            <div class="scenario-outcome">
+              <strong>Evaluation Target:</strong> Priority-10 message jumps directly to index 1 ahead of the routine backlog.
+            </div>
+            <button class="btn btn-primary btn-run-sim" data-scenario="priority_queue">
+              ▶ Run Priority Leapfrog Test
+            </button>
+          </div>
+
+          <!-- Scenario 3 -->
+          <div class="scenario-card">
+            <div class="scenario-badge">Scenario 3 · Resilience</div>
+            <h4>Crash Consumer & Recovery</h4>
+            <p>Crashes a worker while messages stream. Shows queue depth rise safely, revives worker, verifies 100% recovery.</p>
+            <div class="scenario-outcome">
+              <strong>Evaluation Target:</strong> Zero lost events across service crash and restart.
+            </div>
+            <button class="btn btn-primary btn-run-sim" data-scenario="consumer_crash">
+              ▶ Simulate Worker Crash & Recovery
+            </button>
+          </div>
+
+          <!-- Scenario 4 -->
+          <div class="scenario-card">
+            <div class="scenario-badge">Scenario 4 · Saga Compensation</div>
+            <h4>Transfer Saga Timeout Rollback</h4>
+            <p>Initiates hospital transfer, locks target bed in Redis, lets timer expire without receiving hospital accept.</p>
+            <div class="scenario-outcome">
+              <strong>Evaluation Target:</strong> Automated compensating transaction releases target bed & restores source.
+            </div>
+            <button class="btn btn-primary btn-run-sim" data-scenario="saga_timeout">
+              ▶ Run Saga Timeout & Rollback
+            </button>
+          </div>
+
+          <!-- Scenario 5 -->
+          <div class="scenario-card">
+            <div class="scenario-badge">Scenario 5 · Dead-Lettering</div>
+            <h4>Poison Message to DLQ & Replay</h4>
+            <p>Injects corrupted payload. Consumer fails, retries with exponential backoff, dead-letters to DLQ, and replays.</p>
+            <div class="scenario-outcome">
+              <strong>Evaluation Target:</strong> Dead-letter routing, inspection of error, and 1-click message replay.
+            </div>
+            <button class="btn btn-primary btn-run-sim" data-scenario="poison_dlq">
+              ▶ Inject Poison Event & Replay
+            </button>
+          </div>
+
+          <!-- Scenario 6 -->
+          <div class="scenario-card">
+            <div class="scenario-badge">Scenario 6 · TTL Auto-Release</div>
+            <h4>Unconfirmed Reservation Expiry</h4>
+            <p>Reserves a bed with short TTL, verifies active sweeper auto-releases bed to AVAILABLE within &lt; 5 seconds.</p>
+            <div class="scenario-outcome">
+              <strong>Evaluation Target:</strong> Unconfirmed reservation released in &lt; 5 seconds of expiry.
+            </div>
+            <button class="btn btn-primary btn-run-sim" data-scenario="ttl_auto_release">
+              ▶ Test &lt; 5s TTL Auto-Release
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Scenario Execution Console -->
+        <div class="sim-terminal-card card">
+          <div class="panel-header-mini">
+            <h4>Simulator Live Execution Output</h4>
+            <button id="btnClearSimLog" class="btn btn-xs btn-outline">Clear Output</button>
+          </div>
+          <pre id="simOutputConsole" class="terminal-log">Ready. Select a test scenario above to execute live against MediGrid middleware.</pre>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal: Admit / Discharge / Transfer Bed Action -->
+  <div id="bedActionModal" class="modal-backdrop hidden">
+    <div class="modal-dialog card">
+      <div class="modal-header">
+        <h3 id="modalBedTitle">Bed Action</h3>
+        <button class="btn-close" id="btnModalClose">✕</button>
+      </div>
+      <div class="modal-body" id="modalBedBody">
+        <!-- Injected content -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: New Transfer Initiation -->
+  <div id="newTransferModal" class="modal-backdrop hidden">
+    <div class="modal-dialog card">
+      <div class="modal-header">
+        <h3>Initiate Inter-Hospital Patient Transfer</h3>
+        <button class="btn-close" id="btnTransferModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="newTransferForm">
+          <div class="form-field">
+            <label>Patient ID / Name</label>
+            <input type="text" id="trfPatientName" class="input-text" value="Emergency Patient A-42" required>
+          </div>
+          <div class="form-field">
+            <label>Triage Level</label>
+            <select id="trfTriage" class="input-select">
+              <option value="CRITICAL">Critical (Priority 10 · ICU / Vent)</option>
+              <option value="URGENT">Urgent (Priority 5 · Acute)</option>
+              <option value="ROUTINE">Routine (Priority 1 · Standard)</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Transfer From Hospital</label>
+            <select id="trfFromHosp" class="input-select"></select>
+          </div>
+          <div class="form-field">
+            <label>Transfer To Hospital (Destination)</label>
+            <select id="trfToHosp" class="input-select"></select>
+          </div>
+          <div class="form-field">
+            <label>Required Bed Type</label>
+            <select id="trfBedType" class="input-select">
+              <option value="ICU">ICU</option>
+              <option value="VENTILATOR">Mechanical Ventilator</option>
+              <option value="GENERAL">General Ward</option>
+              <option value="OXYGEN">Oxygen HDU</option>
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button type="submit" class="btn btn-primary btn-lg">🚀 Dispatch Transfer Saga</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- MediGrid Client Reactive App -->
+  <script src="app.js"></script>
+</body>
+</html>
