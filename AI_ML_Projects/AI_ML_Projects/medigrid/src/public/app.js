@@ -161,11 +161,11 @@ function initCityMap() {
     scrollWheelZoom: true
   }).setView([17.4150, 78.4450], 12);
 
-  // Modern CartoDB Dark Matter / Positron tiles
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-    maxZoom: 19
-  }).addTo(mapInstance);
+// OpenStreetMap tiles (no API key needed)
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 19
+}).addTo(mapInstance);
 
   // Filter handlers
   document.getElementById('mapBedFilter').addEventListener('change', renderHospitalMarkers);
